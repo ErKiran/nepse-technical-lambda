@@ -1,11 +1,16 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"nepse-technical-gateway-lambda/nepse"
 	"nepse-technical-gateway-lambda/utils"
+	"net/http"
 	"os"
 
+	"github.com/aws/aws-lambda-go/events"
+	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/joho/godotenv"
 )
 
@@ -24,12 +29,13 @@ type TickerResponse struct {
 	KeyLevels  utils.KeyLevels      `json:"keyLevels"`
 }
 
-func main() {
+func TechnicalHandler(ctx context.Context, event events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse, error) {
 	err := godotenv.Load()
 	if err != nil {
 		fmt.Println("err", err)
 		os.Exit(0)
 	}
+
 	rsiMap := make(map[string][]float64)
 
 	macdMap := make(map[string][]float64)
@@ -45,12 +51,7 @@ func main() {
 	nepse, err := nepse.NewNepse()
 
 	if err != nil {
-		return
-	}
-
-	data, err := nepse.GetTechnicalData("NABIL", "D")
-	if err != nil {
-		return
+		return nil, err
 	}
 
 	var tickers = []Ticker{
@@ -59,6 +60,11 @@ func main() {
 	}
 
 	for _, stock := range tickers {
+
+		data, err := nepse.GetTechnicalData(stock.Symbol, "D")
+		if err != nil {
+			return nil, err
+		}
 
 		rsiMap[stock.Symbol] = data.RSI()
 		macdMap[stock.Symbol], signalLineMap[stock.Symbol], histogramMap[stock.Symbol] = data.MACD()
@@ -79,6 +85,18 @@ func main() {
 		KeyLevels:  keyLevels,
 	}
 
-	fmt.Println("response", response)
+	b, err := json.Marshal(response)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Println(string(b))
 
+	return &events.APIGatewayProxyResponse{
+		Body:       string(b),
+		StatusCode: http.StatusOK,
+	}, nil
+}
+
+func main() {
+	lambda.Start(TechnicalHandler)
 }
