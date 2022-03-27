@@ -3,11 +3,10 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"log"
 	"nepse-technical-gateway-lambda/nepse"
 	"nepse-technical-gateway-lambda/utils"
 	"net/http"
-	"os"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -32,13 +31,19 @@ type TickerResponse struct {
 func TechnicalHandler(ctx context.Context, event events.APIGatewayProxyRequest) (*events.APIGatewayProxyResponse, error) {
 	err := godotenv.Load()
 	if err != nil {
-		fmt.Println("err", err)
-		os.Exit(0)
+		log.Fatal(err)
 	}
 
 	queryString := event.QueryStringParameters
 
 	ticker := queryString["ticker"]
+
+	if ticker == "" {
+		return &events.APIGatewayProxyResponse{
+			Body:       string("ticker is required"),
+			StatusCode: http.StatusInternalServerError,
+		}, nil
+	}
 
 	rsiMap := make(map[string][]float64)
 
@@ -55,12 +60,18 @@ func TechnicalHandler(ctx context.Context, event events.APIGatewayProxyRequest) 
 	nepse, err := nepse.NewNepse()
 
 	if err != nil {
-		return nil, err
+		return &events.APIGatewayProxyResponse{
+			Body:       string(err.Error()),
+			StatusCode: http.StatusInternalServerError,
+		}, nil
 	}
 
 	data, err := nepse.GetTechnicalData(ticker, "D")
 	if err != nil {
-		return nil, err
+		return &events.APIGatewayProxyResponse{
+			Body:       string(err.Error()),
+			StatusCode: http.StatusInternalServerError,
+		}, nil
 	}
 
 	rsiMap[ticker] = data.RSI()
@@ -83,7 +94,10 @@ func TechnicalHandler(ctx context.Context, event events.APIGatewayProxyRequest) 
 
 	b, err := json.Marshal(response)
 	if err != nil {
-		return nil, err
+		return &events.APIGatewayProxyResponse{
+			Body:       string(err.Error()),
+			StatusCode: http.StatusInternalServerError,
+		}, nil
 	}
 	return &events.APIGatewayProxyResponse{
 		Body:       string(b),
