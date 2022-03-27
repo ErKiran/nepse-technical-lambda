@@ -36,6 +36,10 @@ func TechnicalHandler(ctx context.Context, event events.APIGatewayProxyRequest) 
 		os.Exit(0)
 	}
 
+	queryString := event.QueryStringParameters
+
+	ticker := queryString["ticker"]
+
 	rsiMap := make(map[string][]float64)
 
 	macdMap := make(map[string][]float64)
@@ -54,25 +58,17 @@ func TechnicalHandler(ctx context.Context, event events.APIGatewayProxyRequest) 
 		return nil, err
 	}
 
-	var tickers = []Ticker{
-		{Symbol: "NABIL"},
-		{Symbol: "MNBBL"},
+	data, err := nepse.GetTechnicalData(ticker, "D")
+	if err != nil {
+		return nil, err
 	}
 
-	for _, stock := range tickers {
-
-		data, err := nepse.GetTechnicalData(stock.Symbol, "D")
-		if err != nil {
-			return nil, err
-		}
-
-		rsiMap[stock.Symbol] = data.RSI()
-		macdMap[stock.Symbol], signalLineMap[stock.Symbol], histogramMap[stock.Symbol] = data.MACD()
-		ema20Map[stock.Symbol] = data.EMA(20)
-		ema50Map[stock.Symbol] = data.EMA(50)
-		ema200Map[stock.Symbol] = data.EMA(200)
-		keyLevels = data.KeyLevels()
-	}
+	rsiMap[ticker] = data.RSI()
+	macdMap[ticker], signalLineMap[ticker], histogramMap[ticker] = data.MACD()
+	ema20Map[ticker] = data.EMA(20)
+	ema50Map[ticker] = data.EMA(50)
+	ema200Map[ticker] = data.EMA(200)
+	keyLevels = data.KeyLevels()
 
 	var response = TickerResponse{
 		RSI:        rsiMap,
@@ -89,8 +85,6 @@ func TechnicalHandler(ctx context.Context, event events.APIGatewayProxyRequest) 
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println(string(b))
-
 	return &events.APIGatewayProxyResponse{
 		Body:       string(b),
 		StatusCode: http.StatusOK,
